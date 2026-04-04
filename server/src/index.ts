@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import { getDb, isEmpty } from './db';
 import { seed } from './seed';
 import contractsRouter from './routes/contracts';
@@ -8,11 +9,14 @@ import graphRouter     from './routes/graph';
 import alertsRouter    from './routes/alerts';
 import aiRouter        from './routes/ai';
 
-const app  = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
+const app        = express();
+const PORT       = process.env.PORT ? parseInt(process.env.PORT) : 3001;
+const isProd     = process.env.NODE_ENV === 'production';
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
-app.use(cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] }));
+if (!isProd) {
+  app.use(cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] }));
+}
 app.use(express.json());
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
@@ -28,6 +32,13 @@ app.get('/health', (_req, res) => {
   const contracts = (db.prepare('SELECT COUNT(*) as cnt FROM contracts').get() as { cnt: number }).cnt;
   res.json({ status: 'ok', contracts, uptime: Math.round(process.uptime()) });
 });
+
+// ─── Serve React frontend in production ──────────────────────────────────────
+if (isProd) {
+  const distPath = path.join(process.cwd(), 'client/dist');
+  app.use(express.static(distPath));
+  app.get('*', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
+}
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
