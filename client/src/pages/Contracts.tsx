@@ -6,34 +6,26 @@ import { Card, LoadingCenter, ErrorMsg, EmptyState, RiskBadge, StatusBadge, Anom
 import { formatAmount } from '../types';
 
 const RISK_TABS = [
-  { key: '', label: 'Все' },
+  { key: '',         label: 'Все' },
   { key: 'critical', label: 'Критический' },
   { key: 'high',     label: 'Высокий' },
   { key: 'medium',   label: 'Средний' },
   { key: 'low',      label: 'Низкий' },
-];
+] as const;
 
 export default function Contracts() {
   const navigate = useNavigate();
-  const [search, setSearch]   = useState('');
-  const [riskLevel, setRisk]  = useState('');
-  const [page, setPage]       = useState(1);
-
-  const filters = {
-    search:     search || undefined,
-    risk_level: riskLevel || undefined,
-    page,
-    limit: 15,
-  };
+  const [search, setSearch] = useState('');
+  const [risk, setRisk]     = useState('');
+  const [page, setPage]     = useState(1);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['contracts', filters],
-    queryFn: () => getContracts(filters),
+    queryKey: ['contracts', { search, risk, page }],
+    queryFn: () => getContracts({ search: search || undefined, risk: (risk || undefined) as 'critical' | 'high' | 'medium' | 'low' | undefined, page, limit: 15 }),
     placeholderData: (prev) => prev,
   });
 
-  const handleSearch = (v: string) => { setSearch(v); setPage(1); };
-  const handleRisk   = (v: string) => { setRisk(v);   setPage(1); };
+  const contracts = data?.data ?? [];
 
   return (
     <div className="page-inner">
@@ -44,12 +36,12 @@ export default function Contracts() {
           style={{ flex: '1 1 260px', maxWidth: 360 }}
           placeholder="Поиск по названию, поставщику, региону..."
           value={search}
-          onChange={(e) => handleSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
         />
         <div style={{ display: 'flex', gap: 4 }}>
           {RISK_TABS.map(({ key, label }) => (
-            <button key={key} className={`filter-tab${riskLevel === key ? ' active' : ''}`}
-              onClick={() => handleRisk(key)}>
+            <button key={key} className={`filter-tab${risk === key ? ' active' : ''}`}
+              onClick={() => { setRisk(key); setPage(1); }}>
               {label}
             </button>
           ))}
@@ -58,7 +50,7 @@ export default function Contracts() {
 
       <Card style={{ position: 'relative' }}>
         {isLoading && <LoadingCenter />}
-        {error    && <ErrorMsg message="Ошибка загрузки контрактов" />}
+        {error && <ErrorMsg message="Ошибка загрузки контрактов" />}
         {!isLoading && !error && (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -67,7 +59,7 @@ export default function Contracts() {
               </span>
             </div>
 
-            {(!data?.contracts.length) ? <EmptyState /> : (
+            {!contracts.length ? <EmptyState /> : (
               <table className="data-table">
                 <thead>
                   <tr>
@@ -83,7 +75,7 @@ export default function Contracts() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.contracts.map((c) => (
+                  {contracts.map((c) => (
                     <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/contracts/${c.id}`)}>
                       <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-3)', fontSize: 10 }}>#{c.id}</td>
                       <td style={{ maxWidth: 260 }}>
@@ -107,10 +99,9 @@ export default function Contracts() {
               </table>
             )}
 
-            {/* Pagination */}
-            {data && data.total > 15 && (
+            {data && data.pages > 1 && (
               <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 16 }}>
-                {Array.from({ length: Math.ceil(data.total / 15) }, (_, i) => i + 1).map((p) => (
+                {Array.from({ length: data.pages }, (_, i) => i + 1).map((p) => (
                   <button key={p} className={`filter-tab${page === p ? ' active' : ''}`}
                     onClick={() => setPage(p)} style={{ minWidth: 32 }}>
                     {p}
