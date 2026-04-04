@@ -20,14 +20,14 @@ if (!isProd) {
 app.use(express.json());
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
-app.use('/contracts', contractsRouter);
-app.use('/stats',     statsRouter);
-app.use('/graph',     graphRouter);
-app.use('/alerts',    alertsRouter);
-app.use('/ai',        aiRouter);
+app.use('/api/contracts', contractsRouter);
+app.use('/api/stats',     statsRouter);
+app.use('/api/graph',     graphRouter);
+app.use('/api/alerts',    alertsRouter);
+app.use('/api/ai',        aiRouter);
 
 // Health check
-app.get('/health', (_req, res) => {
+app.get('/api/health', (_req, res) => {
   const db       = getDb();
   const contracts = (db.prepare('SELECT COUNT(*) as cnt FROM contracts').get() as { cnt: number }).cnt;
   res.json({ status: 'ok', contracts, uptime: Math.round(process.uptime()) });
