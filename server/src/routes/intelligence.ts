@@ -3,6 +3,12 @@ import { getDb } from '../db';
 import { getCompanyByInn, searchOrgInfo } from '../services/orginfo';
 import { fetchLiveTenders } from '../services/xarid';
 import { calculateRisk } from '../risk/engine';
+import {
+  deepInvestigateCompany,
+  investigateTenderSector,
+  investigateOfficial,
+  benchmarkPrice,
+} from '../services/intelligence';
 
 const router = Router();
 
@@ -152,6 +158,56 @@ router.get('/crosscheck', async (req: Request, res: Response) => {
   `).all(c.id);
 
   res.json({ data: { company, relationships, contracts } });
+});
+
+// ─── Perplexity Deep Research ─────────────────────────────────────────────────
+
+// POST /api/intelligence/research/company
+router.post('/research/company', async (req: Request, res: Response) => {
+  const { name, inn } = req.body as { name?: string; inn?: string };
+  if (!name) return res.status(400).json({ error: 'name required' });
+  try {
+    const analysis = await deepInvestigateCompany(name, inn);
+    res.json({ analysis, engine: 'perplexity-sonar-pro' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /api/intelligence/research/tender
+router.post('/research/tender', async (req: Request, res: Response) => {
+  const { category, region } = req.body as { category?: string; region?: string };
+  if (!category) return res.status(400).json({ error: 'category required' });
+  try {
+    const analysis = await investigateTenderSector(category, region);
+    res.json({ analysis, engine: 'perplexity-sonar-pro' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /api/intelligence/research/official
+router.post('/research/official', async (req: Request, res: Response) => {
+  const { name, position } = req.body as { name?: string; position?: string };
+  if (!name) return res.status(400).json({ error: 'name required' });
+  try {
+    const analysis = await investigateOfficial(name, position);
+    res.json({ analysis, engine: 'perplexity-sonar-pro' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /api/intelligence/research/price
+router.post('/research/price', async (req: Request, res: Response) => {
+  const { item, amount, unit } = req.body as { item?: string; amount?: number; unit?: string };
+  if (!item || !amount) return res.status(400).json({ error: 'item and amount required' });
+  try {
+    const analysis = await benchmarkPrice(item, amount, unit);
+    res.json({ analysis, engine: 'perplexity-sonar' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 export default router;

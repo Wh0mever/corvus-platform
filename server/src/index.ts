@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { getDb } from './db';
+import { seed as seedDatabase } from './seed';
 import contractsRouter    from './routes/contracts';
 import statsRouter        from './routes/stats';
 import graphRouter        from './routes/graph';
@@ -28,6 +29,20 @@ app.use('/api/alerts',       alertsRouter);
 app.use('/api/ai',           aiRouter);
 app.use('/api/cases',        casesRouter);
 app.use('/api/intelligence', intelligenceRouter);
+
+// Seed demo data on demand
+app.post('/api/seed', (_req, res) => {
+  try {
+    const db = getDb();
+    const before = (db.prepare('SELECT COUNT(*) as cnt FROM contracts').get() as { cnt: number }).cnt;
+    if (before > 0) return res.json({ message: 'Already seeded', contracts: before });
+    seedDatabase();
+    const after = (db.prepare('SELECT COUNT(*) as cnt FROM contracts').get() as { cnt: number }).cnt;
+    res.json({ message: 'Demo data loaded', contracts: after });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
 
 // Health check
 app.get('/api/health', (_req, res) => {

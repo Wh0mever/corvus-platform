@@ -151,3 +151,24 @@ export async function crosscheckCompany(params: { inn?: string; name?: string })
   const res = await client.get('/intelligence/crosscheck', { params });
   return res.data;
 }
+
+// ─── Perplexity Deep Research ─────────────────────────────────────────────────
+export async function researchCompany(name: string, inn?: string): Promise<{ analysis: string; engine: string }> {
+  const res = await client.post('/intelligence/research/company', { name, inn });
+  return res.data;
+}
+
+export async function researchTenderSector(category: string, region?: string): Promise<{ analysis: string; engine: string }> {
+  const res = await client.post('/intelligence/research/tender', { category, region });
+  return res.data;
+}
+
+export async function researchOfficial(name: string, position?: string): Promise<{ analysis: string; engine: string }> {
+  const res = await client.post('/intelligence/research/official', { name, position });
+  return res.data;
+}
+
+export async function benchmarkContractPrice(item: string, amount: number, unit?: string): Promise<{ analysis: string; engine: string }> {
+  const res = await client.post('/intelligence/research/price', { item, amount, unit });
+  return res.data;
+}

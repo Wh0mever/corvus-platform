@@ -1,18 +1,88 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { lookupCompany, addCompanyToDb, getLiveTenders, crosscheckCompany } from '../api';
+import {
+  lookupCompany, addCompanyToDb, getLiveTenders, crosscheckCompany,
+  researchCompany, researchTenderSector, researchOfficial, benchmarkContractPrice,
+} from '../api';
 import { Card, LoadingCenter, ErrorMsg, EmptyState, SectionHeader } from '../components/ui';
 import { formatAmount, getRiskColor } from '../types';
 import type { OrgInfoResult, LiveTender } from '../types';
 
-type Tab = 'lookup' | 'tenders' | 'crosscheck';
+type Tab = 'lookup' | 'tenders' | 'crosscheck' | 'ai';
+
+// Markdown → styled HTML (simple renderer for Perplexity output)
+function MarkdownBlock({ text }: { text: string }) {
+  const lines = text.split('\n');
+  return (
+    <div style={{ fontFamily: 'var(--font-ui)', fontSize: 12.5, lineHeight: 1.7, color: 'var(--text-1)' }}>
+      {lines.map((line, i) => {
+        if (line.startsWith('## ')) {
+          return (
+            <div key={i} style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--cyan)', marginTop: 18, marginBottom: 6, borderBottom: '1px solid rgba(0,212,255,.15)', paddingBottom: 4 }}>
+              {line.slice(3)}
+            </div>
+          );
+        }
+        if (line.startsWith('### ')) {
+          return (
+            <div key={i} style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--amber)', marginTop: 12, marginBottom: 4 }}>
+              {line.slice(4)}
+            </div>
+          );
+        }
+        if (line.startsWith('• ') || line.startsWith('- ')) {
+          return (
+            <div key={i} style={{ paddingLeft: 16, marginBottom: 2, color: 'var(--text-2)' }}>
+              <span style={{ color: 'var(--cyan)', marginRight: 6 }}>›</span>
+              <InlineMarkdown text={line.slice(2)} />
+            </div>
+          );
+        }
+        if (line.trim() === '') return <div key={i} style={{ height: 6 }} />;
+        return <div key={i} style={{ marginBottom: 2 }}><InlineMarkdown text={line} /></div>;
+      })}
+    </div>
+  );
+}
+
+function InlineMarkdown({ text }: { text: string }) {
+  // Handle **bold** text
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith('**') && part.endsWith('**')
+          ? <strong key={i} style={{ color: 'var(--text-1)', fontWeight: 600 }}>{part.slice(2, -2)}</strong>
+          : <span key={i}>{part}</span>
+      )}
+    </>
+  );
+}
 
 export default function Intelligence() {
   const [tab, setTab] = useState<Tab>('lookup');
+
+  // Lookup state
   const [query, setQuery] = useState('');
   const [inn, setInn] = useState('');
+
+  // Crosscheck state
   const [crossQuery, setCrossQuery] = useState('');
   const [crossInn, setCrossInn] = useState('');
+
+  // AI research state
+  const [aiMode, setAiMode] = useState<'company' | 'tender' | 'official' | 'price'>('company');
+  const [aiCompanyName, setAiCompanyName] = useState('');
+  const [aiCompanyInn, setAiCompanyInn] = useState('');
+  const [aiTenderCategory, setAiTenderCategory] = useState('');
+  const [aiTenderRegion, setAiTenderRegion] = useState('');
+  const [aiOfficialName, setAiOfficialName] = useState('');
+  const [aiOfficialPosition, setAiOfficialPosition] = useState('');
+  const [aiPriceItem, setAiPriceItem] = useState('');
+  const [aiPriceAmount, setAiPriceAmount] = useState('');
+  const [aiPriceUnit, setAiPriceUnit] = useState('');
+  const [aiResult, setAiResult] = useState<{ analysis: string; engine: string; query: string } | null>(null);
+
   const qc = useQueryClient();
 
   // Company lookup
@@ -43,15 +113,51 @@ export default function Intelligence() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['stats'] }),
   });
 
+  // AI research mutation
+  const { mutate: runAiResearch, isPending: aiLoading } = useMutation({
+    mutationFn: async () => {
+      if (aiMode === 'company') {
+        if (!aiCompanyName) throw new Error('Введите название компании');
+        const r = await researchCompany(aiCompanyName, aiCompanyInn || undefined);
+        return { ...r, query: `Компания: ${aiCompanyName}${aiCompanyInn ? ` (ИНН ${aiCompanyInn})` : ''}` };
+      }
+      if (aiMode === 'tender') {
+        if (!aiTenderCategory) throw new Error('Введите категорию');
+        const r = await researchTenderSector(aiTenderCategory, aiTenderRegion || undefined);
+        return { ...r, query: `Тендеры: ${aiTenderCategory}${aiTenderRegion ? ` · ${aiTenderRegion}` : ''}` };
+      }
+      if (aiMode === 'official') {
+        if (!aiOfficialName) throw new Error('Введите имя чиновника');
+        const r = await researchOfficial(aiOfficialName, aiOfficialPosition || undefined);
+        return { ...r, query: `Чиновник: ${aiOfficialName}${aiOfficialPosition ? ` · ${aiOfficialPosition}` : ''}` };
+      }
+      if (aiMode === 'price') {
+        if (!aiPriceItem || !aiPriceAmount) throw new Error('Введите товар и сумму');
+        const r = await benchmarkContractPrice(aiPriceItem, Number(aiPriceAmount), aiPriceUnit || undefined);
+        return { ...r, query: `Бенчмарк цены: ${aiPriceItem} — ${Number(aiPriceAmount).toLocaleString('ru-RU')} сум` };
+      }
+      throw new Error('Unknown mode');
+    },
+    onSuccess: (data) => setAiResult(data),
+  });
+
   const TABS: { key: Tab; label: string; icon: string }[] = [
-    { key: 'lookup',     label: 'Поиск компании',   icon: '🔍' },
-    { key: 'tenders',   label: 'Живые тендеры',     icon: '📋' },
+    { key: 'lookup',     label: 'Поиск компании',       icon: '🔍' },
+    { key: 'tenders',   label: 'Живые тендеры',         icon: '📋' },
     { key: 'crosscheck',label: 'Перекрёстная проверка', icon: '🕸' },
+    { key: 'ai',        label: 'AI Разведка',           icon: '🤖' },
   ];
 
   const orgResult: OrgInfoResult | null = lookupData?.data ?? null;
   const crossResult = (crossData?.data as { company?: object; relationships?: object[]; contracts?: object[] } | null) ?? null;
   const tenders: LiveTender[] = tendersData?.data ?? [];
+
+  const AI_MODES = [
+    { key: 'company' as const,  label: 'Компания',   icon: '🏢', desc: 'Полное досье на компанию: регистрация, тендеры, суды, учредители' },
+    { key: 'tender'  as const,  label: 'Сектор',     icon: '📊', desc: 'Анализ тендерного рынка по категории: монополии, картели, завышение' },
+    { key: 'official'as const,  label: 'Чиновник',   icon: '👤', desc: 'Проверка госслужащего: имущество, аффилированные компании, конфликты' },
+    { key: 'price'   as const,  label: 'Цена',       icon: '💰', desc: 'Бенчмарк цены контракта: сравнение с рынком и аналогичными закупками' },
+  ];
 
   return (
     <div className="page-inner">
@@ -151,6 +257,19 @@ export default function Intelligence() {
                     ))}
                   </div>
                 )}
+
+                {/* Quick AI research button */}
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                  <button className="btn-primary" style={{ fontSize: 11, width: '100%' }}
+                    onClick={() => {
+                      setAiMode('company');
+                      setAiCompanyName(orgResult.name);
+                      setAiCompanyInn(orgResult.inn || '');
+                      setTab('ai');
+                    }}>
+                    🤖 Глубокое AI-расследование
+                  </button>
+                </div>
               </div>
             )}
           </Card>
@@ -248,58 +367,235 @@ export default function Intelligence() {
               </div>
             )}
             {crossResult?.company && (
+              <CrossResultPanel crossResult={crossResult} />
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* ── AI Разведка ── */}
+      {tab === 'ai' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 16, alignItems: 'start' }}>
+          {/* Left panel */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Mode selector */}
+            <Card title="Тип расследования" style={{ position: 'relative' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {AI_MODES.map(m => (
+                  <button key={m.key}
+                    onClick={() => { setAiMode(m.key); setAiResult(null); }}
+                    style={{
+                      display: 'flex', gap: 10, alignItems: 'flex-start', padding: '10px 12px',
+                      background: aiMode === m.key ? 'rgba(0,212,255,.1)' : 'rgba(255,255,255,.02)',
+                      border: `1px solid ${aiMode === m.key ? 'var(--cyan)' : 'var(--border)'}`,
+                      borderRadius: 8, cursor: 'pointer', textAlign: 'left', transition: 'all .15s',
+                    }}>
+                    <span style={{ fontSize: 18 }}>{m.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: aiMode === m.key ? 'var(--cyan)' : 'var(--text-1)', marginBottom: 2 }}>{m.label}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text-3)', lineHeight: 1.4 }}>{m.desc}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </Card>
+
+            {/* Input form */}
+            <Card title="Параметры запроса" style={{ position: 'relative' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {aiMode === 'company' && (
+                  <>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 4 }}>НАЗВАНИЕ КОМПАНИИ *</div>
+                      <input className="search-box" placeholder="ООО Строй Инвест..." value={aiCompanyName}
+                        onChange={e => setAiCompanyName(e.target.value)} style={{ width: '100%' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 4 }}>ИНН (необязательно)</div>
+                      <input className="search-box" placeholder="123456789" value={aiCompanyInn}
+                        onChange={e => setAiCompanyInn(e.target.value.replace(/\D/g, '').slice(0, 9))} style={{ width: '100%' }} />
+                    </div>
+                  </>
+                )}
+                {aiMode === 'tender' && (
+                  <>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 4 }}>КАТЕГОРИЯ ЗАКУПОК *</div>
+                      <input className="search-box" placeholder="Строительство дорог..." value={aiTenderCategory}
+                        onChange={e => setAiTenderCategory(e.target.value)} style={{ width: '100%' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 4 }}>РЕГИОН (необязательно)</div>
+                      <input className="search-box" placeholder="Ташкент, Самарканд..." value={aiTenderRegion}
+                        onChange={e => setAiTenderRegion(e.target.value)} style={{ width: '100%' }} />
+                    </div>
+                  </>
+                )}
+                {aiMode === 'official' && (
+                  <>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 4 }}>ФИО ЧИНОВНИКА *</div>
+                      <input className="search-box" placeholder="Иванов Иван Иванович" value={aiOfficialName}
+                        onChange={e => setAiOfficialName(e.target.value)} style={{ width: '100%' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 4 }}>ДОЛЖНОСТЬ (необязательно)</div>
+                      <input className="search-box" placeholder="Министр строительства..." value={aiOfficialPosition}
+                        onChange={e => setAiOfficialPosition(e.target.value)} style={{ width: '100%' }} />
+                    </div>
+                  </>
+                )}
+                {aiMode === 'price' && (
+                  <>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 4 }}>ТОВАР / УСЛУГА *</div>
+                      <input className="search-box" placeholder="Асфальтирование дороги..." value={aiPriceItem}
+                        onChange={e => setAiPriceItem(e.target.value)} style={{ width: '100%' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 4 }}>СУММА КОНТРАКТА (сум) *</div>
+                      <input className="search-box" placeholder="5000000000" value={aiPriceAmount}
+                        onChange={e => setAiPriceAmount(e.target.value.replace(/\D/g, ''))} style={{ width: '100%' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 4 }}>ЕДИНИЦА ИЗМЕРЕНИЯ</div>
+                      <input className="search-box" placeholder="за 1 км, за 1 м², за тонну..." value={aiPriceUnit}
+                        onChange={e => setAiPriceUnit(e.target.value)} style={{ width: '100%' }} />
+                    </div>
+                  </>
+                )}
+
+                <button className="btn-primary" style={{ marginTop: 4, fontSize: 12, padding: '10px' }}
+                  onClick={() => runAiResearch()}
+                  disabled={aiLoading || (
+                    aiMode === 'company' ? !aiCompanyName :
+                    aiMode === 'tender'  ? !aiTenderCategory :
+                    aiMode === 'official'? !aiOfficialName :
+                    !aiPriceItem || !aiPriceAmount
+                  )}>
+                  {aiLoading ? (
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <span className="blink" style={{ width: 6, height: 6, background: 'var(--cyan)', borderRadius: '50%', display: 'inline-block' }}/>
+                      Perplexity анализирует...
+                    </span>
+                  ) : '🤖 Запустить AI-расследование'}
+                </button>
+
+                <div style={{ fontSize: 10, color: 'var(--text-3)', textAlign: 'center', lineHeight: 1.5 }}>
+                  Поиск по orginfo.uz · court.gov.uz · xarid.uzex.uz · СМИ Узбекистана
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Right result panel */}
+          <Card style={{ position: 'relative', minHeight: 400 }}>
+            {aiLoading && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: 16 }}>
+                <div style={{ width: 48, height: 48, border: '2px solid var(--border)', borderTop: '2px solid var(--cyan)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                <div style={{ fontSize: 13, color: 'var(--text-2)' }}>Perplexity AI сканирует открытые источники...</div>
+                <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+                  orginfo.uz · court.gov.uz · xarid.uzex.uz · kun.uz · gazeta.uz
+                </div>
+              </div>
+            )}
+
+            {!aiLoading && !aiResult && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', gap: 12 }}>
+                <div style={{ fontSize: 40, opacity: 0.3 }}>🤖</div>
+                <div style={{ fontSize: 14, color: 'var(--text-3)' }}>Выберите тип расследования и введите данные</div>
+                <div style={{ fontSize: 11, color: 'var(--text-3)', opacity: 0.7 }}>Powered by Perplexity sonar-pro — поиск по реальному вебу</div>
+              </div>
+            )}
+
+            {!aiLoading && aiResult && (
               <div>
-                {/* Company */}
-                {(() => {
-                  const c = crossResult.company as { name: string; risk_score: number; wins_count: number; region: string; inn: string };
-                  return (
-                    <div style={{ marginBottom: 16, padding: '10px 14px', background: 'rgba(0,212,255,.05)', borderRadius: 6, border: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>{c.name}</div>
-                      <div style={{ display: 'flex', gap: 14, marginTop: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-                        <span style={{ color: 'var(--text-3)' }}>ИНН: {c.inn}</span>
-                        <span style={{ color: 'var(--text-3)' }}>Регион: {c.region}</span>
-                        <span style={{ color: 'var(--text-3)' }}>Побед: {c.wins_count}</span>
-                        <span style={{ color: getRiskColor(c.risk_score) }}>Риск: {c.risk_score}</span>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Relationships */}
-                {(crossResult.relationships as Array<{ rel_type: string; from_name: string; to_name: string }> || []).length > 0 && (
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.1em' }}>
-                      Связи ({(crossResult.relationships as object[]).length})
-                    </div>
-                    {(crossResult.relationships as Array<{ rel_type: string; from_name: string; to_name: string }>).map((r, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 12, borderBottom: '1px solid var(--border)' }}>
-                        <span style={{ color: 'var(--text-1)' }}>{r.from_name}</span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--amber)', padding: '1px 6px', background: 'rgba(245,158,11,.1)', borderRadius: 3 }}>{r.rel_type}</span>
-                        <span style={{ color: 'var(--text-1)' }}>{r.to_name}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Contracts */}
-                {(crossResult.contracts as object[] || []).length > 0 && (
+                {/* Result header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
                   <div>
-                    <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.1em' }}>
-                      Контракты ({(crossResult.contracts as object[]).length})
+                    <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 4 }}>
+                      AI РАССЛЕДОВАНИЕ
                     </div>
-                    {(crossResult.contracts as Array<{ id: number; title: string; amount: number; risk_score: number; date: string }>).map(c => (
-                      <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 12, borderBottom: '1px solid var(--border)' }}>
-                        <span style={{ color: 'var(--text-1)', flex: 1 }}>{c.title}</span>
-                        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--cyan)', marginLeft: 12 }}>{formatAmount(c.amount)}</span>
-                        <span className={`risk-badge ${c.risk_score >= 80 ? 'critical' : c.risk_score >= 60 ? 'high' : c.risk_score >= 40 ? 'medium' : 'low'}`}
-                          style={{ marginLeft: 8 }}>{c.risk_score}</span>
-                      </div>
-                    ))}
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>{aiResult.query}</div>
                   </div>
-                )}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{
+                      fontSize: 9, fontFamily: 'var(--font-mono)', padding: '3px 8px',
+                      background: 'rgba(0,212,255,.1)', border: '1px solid rgba(0,212,255,.3)',
+                      borderRadius: 3, color: 'var(--cyan)', textTransform: 'uppercase',
+                    }}>
+                      {aiResult.engine}
+                    </span>
+                    <button className="btn-ghost" style={{ fontSize: 10 }}
+                      onClick={() => setAiResult(null)}>Очистить</button>
+                  </div>
+                </div>
+
+                {/* Analysis content */}
+                <div style={{ maxHeight: 'calc(100vh - 320px)', overflowY: 'auto', paddingRight: 4 }}>
+                  <MarkdownBlock text={aiResult.analysis} />
+                </div>
               </div>
             )}
           </Card>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
+  );
+}
+
+// Extracted component to avoid IIFE in JSX
+function CrossResultPanel({ crossResult }: {
+  crossResult: { company?: object; relationships?: object[]; contracts?: object[] }
+}) {
+  const c = crossResult.company as { name: string; risk_score: number; wins_count: number; region: string; inn: string };
+  const rels = (crossResult.relationships as Array<{ rel_type: string; from_name: string; to_name: string }>) || [];
+  const contracts = (crossResult.contracts as Array<{ id: number; title: string; amount: number; risk_score: number; date: string }>) || [];
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16, padding: '10px 14px', background: 'rgba(0,212,255,.05)', borderRadius: 6, border: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>{c.name}</div>
+        <div style={{ display: 'flex', gap: 14, marginTop: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+          <span style={{ color: 'var(--text-3)' }}>ИНН: {c.inn}</span>
+          <span style={{ color: 'var(--text-3)' }}>Регион: {c.region}</span>
+          <span style={{ color: 'var(--text-3)' }}>Побед: {c.wins_count}</span>
+          <span style={{ color: getRiskColor(c.risk_score) }}>Риск: {c.risk_score}</span>
+        </div>
+      </div>
+
+      {rels.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.1em' }}>
+            Связи ({rels.length})
+          </div>
+          {rels.map((r, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 12, borderBottom: '1px solid var(--border)' }}>
+              <span style={{ color: 'var(--text-1)' }}>{r.from_name}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--amber)', padding: '1px 6px', background: 'rgba(245,158,11,.1)', borderRadius: 3 }}>{r.rel_type}</span>
+              <span style={{ color: 'var(--text-1)' }}>{r.to_name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {contracts.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.1em' }}>
+            Контракты ({contracts.length})
+          </div>
+          {contracts.map(c => (
+            <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 12, borderBottom: '1px solid var(--border)' }}>
+              <span style={{ color: 'var(--text-1)', flex: 1 }}>{c.title}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--cyan)', marginLeft: 12 }}>{formatAmount(c.amount)}</span>
+              <span className={`risk-badge ${c.risk_score >= 80 ? 'critical' : c.risk_score >= 60 ? 'high' : c.risk_score >= 40 ? 'medium' : 'low'}`}
+                style={{ marginLeft: 8 }}>{c.risk_score}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
