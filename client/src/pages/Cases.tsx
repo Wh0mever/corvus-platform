@@ -21,7 +21,7 @@ export default function Cases() {
   const [showCreate, setShowCreate] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [newEntity, setNewEntity] = useState({ name: '', type: 'company', note: '' });
-  const [newCase, setNewCase] = useState({ title: '', description: '', risk_level: 'medium', investigator: 'Аналитик' });
+  const [newCase, setNewCase] = useState<{ title: string; description: string; risk_level: 'critical' | 'high' | 'medium' | 'low'; investigator: string }>({ title: '', description: '', risk_level: 'medium', investigator: 'Аналитик' });
 
   const { data: casesData, isLoading, error } = useQuery({
     queryKey: ['cases'],
