@@ -1,10 +1,10 @@
 import axios from 'axios';
-import type { Contract, ContractDetail, DashboardStats, Alert, GraphNode, GraphEdge } from '../types';
+import type { Contract, ContractDetail, DashboardStats, Alert, GraphNode, GraphEdge, Case, CaseDetail, OrgInfoResult, LiveTender } from '../types';
 
 const client = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
-  timeout: 15000,
+  timeout: 20000,
 });
 
 client.interceptors.response.use(
@@ -53,34 +53,20 @@ export async function getStats(): Promise<DashboardStats> {
   return res.data;
 }
 
-export async function getTopRisk(): Promise<{ data: Contract[] }> {
-  const res = await client.get('/stats/top-risk');
-  return res.data;
-}
-
 // ─── Alerts ───────────────────────────────────────────────────────────────────
-export interface AlertFilters {
-  severity?: string;
-  read?: boolean;
-}
-
 export interface AlertListResponse {
   data: Alert[];
   total: number;
   unread: number;
 }
 
-export async function getAlerts(filters: AlertFilters = {}): Promise<AlertListResponse> {
-  const res = await client.get('/alerts', { params: filters });
+export async function getAlerts(): Promise<AlertListResponse> {
+  const res = await client.get('/alerts');
   return res.data;
 }
 
 export async function markAlertRead(id: number): Promise<void> {
   await client.patch(`/alerts/${id}`);
-}
-
-export async function markAllAlertsRead(): Promise<void> {
-  await client.patch('/alerts/read-all');
 }
 
 // ─── Graph ────────────────────────────────────────────────────────────────────
@@ -95,12 +81,73 @@ export async function getGraph(riskMin = 0): Promise<GraphData> {
 }
 
 // ─── AI ───────────────────────────────────────────────────────────────────────
-export async function queryAI(message: string): Promise<{ response: string }> {
+export async function queryAI(message: string): Promise<{ response: string; engine?: string }> {
   const res = await client.post('/ai/query', { message });
   return res.data;
 }
 
-export async function analyzeContract(contractId: number): Promise<{ analysis: string }> {
+export async function analyzeContract(contractId: number): Promise<{ analysis: string; engine?: string }> {
   const res = await client.post(`/ai/analyze/${contractId}`);
+  return res.data;
+}
+
+// ─── Investigation Cases ──────────────────────────────────────────────────────
+export async function getCases(): Promise<{ data: Case[] }> {
+  const res = await client.get('/cases');
+  return res.data;
+}
+
+export async function getCase(id: number): Promise<{ data: CaseDetail }> {
+  const res = await client.get(`/cases/${id}`);
+  return res.data;
+}
+
+export async function createCase(data: Partial<Case>): Promise<{ data: Case }> {
+  const res = await client.post('/cases', data);
+  return res.data;
+}
+
+export async function updateCase(id: number, data: Partial<Case>): Promise<void> {
+  await client.patch(`/cases/${id}`, data);
+}
+
+export async function deleteCase(id: number): Promise<void> {
+  await client.delete(`/cases/${id}`);
+}
+
+export async function addCaseEntity(caseId: number, entity: { entity_type: string; entity_id?: number; entity_name: string; note?: string }): Promise<void> {
+  await client.post(`/cases/${caseId}/entities`, entity);
+}
+
+export async function removeCaseEntity(caseId: number, entityId: number): Promise<void> {
+  await client.delete(`/cases/${caseId}/entities/${entityId}`);
+}
+
+export async function addCaseNote(caseId: number, content: string, author?: string): Promise<void> {
+  await client.post(`/cases/${caseId}/notes`, { content, author });
+}
+
+// ─── Intelligence ─────────────────────────────────────────────────────────────
+export async function lookupCompany(params: { q?: string; inn?: string }): Promise<{ data: OrgInfoResult | null; db_company: object | null }> {
+  const res = await client.get('/intelligence/company', { params });
+  return res.data;
+}
+
+export async function addCompanyToDb(data: { inn?: string; name: string; region?: string; risk_score?: number }): Promise<void> {
+  await client.post('/intelligence/company/add', data);
+}
+
+export async function getLiveTenders(): Promise<{ data: LiveTender[]; source: string }> {
+  const res = await client.get('/intelligence/tenders');
+  return res.data;
+}
+
+export async function importContracts(contracts: object[]): Promise<{ imported: number; errors: string[] }> {
+  const res = await client.post('/intelligence/import', { contracts });
+  return res.data;
+}
+
+export async function crosscheckCompany(params: { inn?: string; name?: string }): Promise<{ data: object | null }> {
+  const res = await client.get('/intelligence/crosscheck', { params });
   return res.data;
 }

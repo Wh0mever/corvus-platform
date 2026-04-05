@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import Header from './Header';
+import CookieBanner from '../CookieBanner';
 
 interface Props { children: ReactNode; }
 
@@ -16,9 +18,11 @@ export default function Layout({ children }: Props) {
         flexShrink: 0,
       }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', display: 'flex', gap: 14, alignItems: 'center' }}>
-          <span>CORVUS v1.0.0</span>
+          <span>CORVUS v3.0</span>
           <span>·</span>
-          <span>База: <span style={{ color: 'var(--green)' }}>СИНХРОНИЗИРОВАНА</span></span>
+          <span>Perplexity AI</span>
+          <span>·</span>
+          <Link to="/privacy" style={{ color: 'var(--text-3)', opacity: .7 }}>Конфиденциальность</Link>
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', display: 'flex', gap: 8, alignItems: 'center' }}>
           <span>🇺🇿</span>
@@ -29,6 +33,7 @@ export default function Layout({ children }: Props) {
           </a>
         </div>
       </footer>
+      <CookieBanner />
     </div>
   );
 }

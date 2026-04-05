@@ -1,13 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { getDb, isEmpty } from './db';
-import { seed } from './seed';
-import contractsRouter from './routes/contracts';
-import statsRouter     from './routes/stats';
-import graphRouter     from './routes/graph';
-import alertsRouter    from './routes/alerts';
-import aiRouter        from './routes/ai';
+import { getDb } from './db';
+import contractsRouter    from './routes/contracts';
+import statsRouter        from './routes/stats';
+import graphRouter        from './routes/graph';
+import alertsRouter       from './routes/alerts';
+import aiRouter           from './routes/ai';
+import casesRouter        from './routes/cases';
+import intelligenceRouter from './routes/intelligence';
 
 const app        = express();
 const PORT       = process.env.PORT ? parseInt(process.env.PORT) : 3001;
@@ -20,11 +21,13 @@ if (!isProd) {
 app.use(express.json());
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
-app.use('/api/contracts', contractsRouter);
-app.use('/api/stats',     statsRouter);
-app.use('/api/graph',     graphRouter);
-app.use('/api/alerts',    alertsRouter);
-app.use('/api/ai',        aiRouter);
+app.use('/api/contracts',    contractsRouter);
+app.use('/api/stats',        statsRouter);
+app.use('/api/graph',        graphRouter);
+app.use('/api/alerts',       alertsRouter);
+app.use('/api/ai',           aiRouter);
+app.use('/api/cases',        casesRouter);
+app.use('/api/intelligence', intelligenceRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -51,12 +54,8 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 async function main() {
-  // Ensure schema + seed
+  // Ensure schema
   getDb();
-  if (isEmpty()) {
-    console.log('📦 Empty database detected. Seeding...');
-    seed();
-  }
 
   app.listen(PORT, () => {
     console.log(`\n🔍 CORVUS Server running at http://localhost:${PORT}`);

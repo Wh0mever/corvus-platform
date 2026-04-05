@@ -6,18 +6,24 @@ import ContractDetail from './pages/ContractDetail';
 import Graph          from './pages/Graph';
 import AIAnalyst      from './pages/AIAnalyst';
 import Alerts         from './pages/Alerts';
+import Intelligence   from './pages/Intelligence';
+import Cases          from './pages/Cases';
+import PrivacyPolicy  from './pages/PrivacyPolicy';
 
 export default function App() {
   return (
     <Layout>
       <Routes>
-        <Route path="/"               element={<Dashboard />} />
-        <Route path="/contracts"      element={<Contracts />} />
-        <Route path="/contracts/:id"  element={<ContractDetail />} />
-        <Route path="/graph"          element={<Graph />} />
-        <Route path="/ai"             element={<AIAnalyst />} />
-        <Route path="/alerts"         element={<Alerts />} />
-        <Route path="*"               element={<Navigate to="/" replace />} />
+        <Route path="/"                element={<Dashboard />} />
+        <Route path="/contracts"       element={<Contracts />} />
+        <Route path="/contracts/:id"   element={<ContractDetail />} />
+        <Route path="/graph"           element={<Graph />} />
+        <Route path="/ai"              element={<AIAnalyst />} />
+        <Route path="/alerts"          element={<Alerts />} />
+        <Route path="/intelligence"    element={<Intelligence />} />
+        <Route path="/cases"           element={<Cases />} />
+        <Route path="/privacy"         element={<PrivacyPolicy />} />
+        <Route path="*"                element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
   );

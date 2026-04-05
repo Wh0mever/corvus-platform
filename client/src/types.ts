@@ -9,6 +9,8 @@ export interface Company {
   wins_count: number;
   total_value: number;
   risk_score: number;
+  description?: string;
+  contract_count?: number;
 }
 
 export interface Contract {
@@ -74,7 +76,6 @@ export interface GraphNode {
   name: string;
   risk: number;
   meta: Record<string, string | number | boolean>;
-  // D3 simulation fields (added at runtime)
   x?: number;
   y?: number;
   fx?: number | null;
@@ -120,6 +121,70 @@ export interface DashboardStats {
   }>;
 }
 
+// ─── Investigation Cases ──────────────────────────────────────────────────────
+export interface Case {
+  id: number;
+  title: string;
+  description: string;
+  status: 'open' | 'investigating' | 'closed' | 'referred';
+  risk_level: 'critical' | 'high' | 'medium' | 'low';
+  investigator: string;
+  created_at: string;
+  updated_at: string;
+  entity_count?: number;
+  note_count?: number;
+}
+
+export interface CaseEntity {
+  id: number;
+  case_id: number;
+  entity_type: 'contract' | 'company' | 'person' | 'tender';
+  entity_id?: number;
+  entity_name: string;
+  note: string;
+  added_at: string;
+}
+
+export interface CaseNote {
+  id: number;
+  case_id: number;
+  content: string;
+  author: string;
+  created_at: string;
+}
+
+export interface CaseDetail extends Case {
+  entities: CaseEntity[];
+  notes: CaseNote[];
+}
+
+// ─── Intelligence ─────────────────────────────────────────────────────────────
+export interface OrgInfoResult {
+  inn: string;
+  name: string;
+  director?: string;
+  founders?: string[];
+  authorized_capital?: number;
+  registration_date?: string;
+  status?: string;
+  address?: string;
+  main_activity?: string;
+  source: 'orginfo' | 'perplexity';
+}
+
+export interface LiveTender {
+  id: string;
+  title: string;
+  customer: string;
+  amount?: number;
+  deadline?: string;
+  category?: string;
+  region?: string;
+  url: string;
+  published_at: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 export type RiskLevel = 'critical' | 'high' | 'medium' | 'low';
 
 export function getRiskLevel(score: number): RiskLevel {
@@ -136,15 +201,10 @@ export function getRiskColor(score: number): string {
   return 'var(--green)';
 }
 
-export function getRiskLabel(score: number): string {
-  if (score >= 80) return 'Критический';
-  if (score >= 60) return 'Высокий';
-  if (score >= 40) return 'Умеренный';
-  return 'Низкий';
-}
-
 export function formatAmount(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000)     return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${n}`;
+  if (!n) return '—';
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)} млрд`;
+  if (n >= 1_000_000)     return `${(n / 1_000_000).toFixed(2)} млн`;
+  if (n >= 1_000)         return `${(n / 1_000).toFixed(0)} тыс`;
+  return String(n);
 }

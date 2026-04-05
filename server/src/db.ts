@@ -99,6 +99,47 @@ function initSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_alerts_severity    ON alerts(severity);
     CREATE INDEX IF NOT EXISTS idx_rels_from          ON relationships(from_type, from_id);
     CREATE INDEX IF NOT EXISTS idx_rels_to            ON relationships(to_type, to_id);
+
+    CREATE TABLE IF NOT EXISTS cases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open',
+      risk_level TEXT NOT NULL DEFAULT 'medium',
+      investigator TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS case_entities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+      entity_type TEXT NOT NULL,
+      entity_id INTEGER,
+      entity_name TEXT NOT NULL DEFAULT '',
+      note TEXT NOT NULL DEFAULT '',
+      added_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS case_notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      author TEXT NOT NULL DEFAULT 'Аналитик',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS data_sources (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id INTEGER NOT NULL,
+      raw_data TEXT NOT NULL DEFAULT '{}',
+      fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_case_entities_case ON case_entities(case_id);
+    CREATE INDEX IF NOT EXISTS idx_case_notes_case ON case_notes(case_id);
   `);
 }
 
