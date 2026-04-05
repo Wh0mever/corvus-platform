@@ -90,7 +90,7 @@ export default function Cases() {
               <textarea value={newCase.description} onChange={e => setNewCase(p => ({ ...p, description: e.target.value }))}
                 placeholder="Описание..." rows={2}
                 style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 12px', color: 'var(--text-1)', fontSize: 12, fontFamily: 'var(--font-ui)', resize: 'none', width: '100%' }} />
-              <select value={newCase.risk_level} onChange={e => setNewCase(p => ({ ...p, risk_level: e.target.value }))}
+              <select value={newCase.risk_level} onChange={e => setNewCase(p => ({ ...p, risk_level: e.target.value as 'critical' | 'high' | 'medium' | 'low' }))}
                 style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 10px', color: 'var(--text-1)', fontSize: 12 }}>
                 <option value="critical">Критический риск</option>
                 <option value="high">Высокий риск</option>
